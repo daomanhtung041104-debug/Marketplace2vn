@@ -1,7 +1,6 @@
 export const NAVIGATION = [
   { name: 'Trang chủ', href: '/' },
   { name: 'Việc làm', href: '/jobs' },
-  { name: 'DAO', href: '/dao' },
   { name: 'Chat', href: '/chat' },
   { name: 'Dashboard', href: '/dashboard' }
 ];
@@ -118,7 +117,7 @@ export const FOOTER_LINKS = {
     { name: "Discord", href: "https://discord.gg" },
     { name: "Telegram", href: "https://t.me" },
     { name: "Twitter", href: "https://twitter.com" },
-    { name: "GitHub", href: "https://github.com/dmt041104111003/web2.5Freelancer" }
+    { name: "GitHub", href: "https://github.com/dmt041104111003/marketplace2vn" }
   ],
   legal: [
     { name: "Privacy Policy", href: "/privacy" },
@@ -128,7 +127,7 @@ export const FOOTER_LINKS = {
 };
 
 export const HERO_DATA = {
-  title: "Web2.5 Freelancer",
+  title: "Marketplace2vn",
   subtitle: "Platform",
   description: "Nền tảng freelancer phi tập trung với xác minh danh tính và escrow tự động, đảm bảo an toàn cho cả người thuê và người làm việc.",
   primaryCta: "Đăng Job với Escrow",
