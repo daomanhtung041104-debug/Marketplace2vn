@@ -1,96 +1,89 @@
 'use client';
 
-import { useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { Alert } from '@/components/ui/alert';
-import { XCircle } from 'lucide-react';
-import { VERIFICATION_STEPS, VerificationStatus } from '@/constants/did-verification';
-import VerificationProgress from '@/components/auth/VerificationProgress';
-import SelfieStep from '@/components/auth/SelfieStep';
-import IDUploadStep from '@/components/auth/IDUploadStep';
-import ChallengeSignStep from '@/components/auth/ChallengeSignStep';
-import SuccessStep from '@/components/auth/SuccessStep';
+import { useEffect, useState } from 'react';
+import { useWallet } from '@/contexts/WalletContext';
+import DIDVerificationLayout from '@/components/auth/DIDVerificationLayout';
+import DIDVerificationSteps from '@/components/auth/DIDVerificationSteps';
+import { useDIDVerification } from '@/hooks/useDIDVerification';
+import DIDVerifiedStatus from '@/components/auth/DIDVerifiedStatus';
+
 
 export default function DIDVerificationPage() {
-  const [step, setStep] = useState(1);
-  const [verificationStatus, setVerificationStatus] = useState<VerificationStatus>('idle');
-  const [progress, setProgress] = useState(0);
-  const [errorMessage, setErrorMessage] = useState('');
+  const { account } = useWallet();
+  const [checked, setChecked] = useState(false);
+  const [hasVerified, setHasVerified] = useState(false);
+  const {
+    step,
+    verificationStatus,
+    progress,
+    errorMessage,
+    idCardData,
+    faceVerificationResult,
+    isFaceApiLoading,
+    showEncryptionPreview,
+    transactionHash,
+    blockchainData,
+    handleNextStep,
+    handleBackStep,
+    handleError,
+    registerProfileOnChain,
+    handleConfirmBlockchain,
+    uploadIdCard,
+    verifyWebcam,
+    signChallenge,
+    handleViewProfile,
+    handleBackToEncryption
+  } = useDIDVerification(account);
 
-  const handleNextStep = () => {
-    setStep(prev => prev + 1);
-  };
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;500;600;700&family=Roboto+Condensed:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&display=swap';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+  }, []);
 
-  const handleError = (message: string) => {
-    setErrorMessage(message);
-  };
-
-  const signChallenge = async () => {
-    setVerificationStatus('processing');
-    setProgress(0);
-    
-    // Simulate verification process
-    const interval = setInterval(() => {
-      setProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setVerificationStatus('success');
-          setStep(4);
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 200);
-  };
+  useEffect(() => {
+    const run = async () => {
+      if (!account) { setChecked(true); setHasVerified(false); return; }
+      try {
+        const res = await fetch(`/api/did/${account}`);
+        if (res.ok) {
+          const data = await res.json();
+          setHasVerified(!!data.hasVerified);
+        } else { setHasVerified(false); }
+      } finally { setChecked(true); }
+    };
+    run();
+  }, [account]);
 
   return (
-    <div className="container mx-auto py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">Xác minh Danh tính (DID)</h1>
-          <p className="text-muted-foreground">
-            Xác minh danh tính của bạn để tham gia nền tảng Web2.5 Freelancer
-          </p>
-        </div>
-
-        {/* Progress Steps */}
-        <VerificationProgress steps={VERIFICATION_STEPS} currentStep={step} />
-
-        {/* Step Content */}
-        <Card>
-          <div className="mb-4">
-            <h2 className="text-xl font-semibold">{VERIFICATION_STEPS[step - 1]?.title}</h2>
-          </div>
-          <div>
-            {step === 1 && (
-              <SelfieStep onNext={handleNextStep} onError={handleError} />
-            )}
-
-            {step === 2 && (
-              <IDUploadStep onNext={handleNextStep} />
-            )}
-
-            {step === 3 && (
-              <ChallengeSignStep 
-                verificationStatus={verificationStatus}
-                progress={progress}
-                onSignChallenge={signChallenge}
-              />
-            )}
-
-            {step === 4 && <SuccessStep />}
-
-            {errorMessage && (
-              <Alert variant="danger">
-                <div className="flex items-center gap-2">
-                  <XCircle className="h-4 w-4" />
-                  <span>{errorMessage}</span>
-                </div>
-              </Alert>
-            )}
-          </div>
-        </Card>
-      </div>
-    </div>
+    <DIDVerificationLayout>
+      {checked && hasVerified ? (
+        <DIDVerifiedStatus />
+      ) : (
+        <DIDVerificationSteps
+        step={step}
+        verificationStatus={verificationStatus}
+        progress={progress}
+        errorMessage={errorMessage}
+        idCardData={idCardData}
+        faceVerificationResult={faceVerificationResult}
+        isFaceApiLoading={isFaceApiLoading}
+        showEncryptionPreview={showEncryptionPreview}
+        transactionHash={transactionHash}
+        blockchainData={blockchainData}
+        account={account || ''}
+        onNext={handleNextStep}
+        onBack={handleBackStep}
+        onError={handleError}
+        onUploadIdCard={uploadIdCard}
+        onVerifyWebcam={verifyWebcam}
+        onRegisterProfile={registerProfileOnChain}
+        onConfirmBlockchain={handleConfirmBlockchain}
+        onBackToEncryption={handleBackToEncryption}
+        onViewProfile={handleViewProfile}
+      />
+      )}
+    </DIDVerificationLayout>
   );
 }
