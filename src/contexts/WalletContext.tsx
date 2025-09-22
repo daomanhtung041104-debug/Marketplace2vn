@@ -1,6 +1,7 @@
 "use client";
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { signIn, signOut, useSession } from 'next-auth/react';
 import { toast } from 'sonner';
 
 type WalletContextType = {
@@ -34,6 +35,7 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [accountType, setAccountType] = useState<'aptos' | null>(null);
   const [aptosNetwork, setAptosNetwork] = useState<string | null>(null);
+  const { data: session } = useSession();
 
   useEffect(() => {
     const savedAccount = localStorage.getItem('walletAccount');
@@ -95,7 +97,11 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     if ('aptos' in window) {
       try {
         const wallet = window.aptos!;
-        await wallet.connect();
+        try {
+          await wallet.account();
+        } catch {
+          await wallet.connect();
+        }
         const acc = await wallet.account();
         const network = await wallet.network();
         setAccount(acc.address);
@@ -104,6 +110,20 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         localStorage.setItem('walletAccount', acc.address);
         localStorage.setItem('walletType', 'aptos');
         localStorage.setItem('aptosNetwork', network);
+        if (!session) {
+          try {
+            const result = await signIn('credentials', {
+              redirect: false,
+              address: acc.address,
+            });
+            if (!result || result.error) {
+              throw new Error(result?.error || 'Đăng nhập thất bại');
+            }
+          } catch (e) {
+            console.error('NextAuth sign-in failed', e);
+            toast.error('Đăng nhập thất bại');
+          }
+        }
         toast.success(`Kết nối ví Petra thành công! Địa chỉ: ${acc.address.slice(0, 6)}...${acc.address.slice(-4)}`);
       } catch (err) {
         console.error('Wallet connection error:', err);
@@ -128,6 +148,9 @@ export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         toast.error('Lỗi khi ngắt kết nối ví');
       }
     }
+    try {
+      await signOut({ redirect: false });
+    } catch {}
     setAccount(null);
     setAccountType(null);
     setAptosNetwork(null);
