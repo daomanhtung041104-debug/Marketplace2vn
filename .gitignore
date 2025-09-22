@@ -40,5 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Face folder
-/Face
+# Python virtual environments
+/Face/face_env/
+/Face/**/__pycache__/
+/Face/**/*.pyc
+/Face/**/*.pyo
+/Face/**/*.pyd
