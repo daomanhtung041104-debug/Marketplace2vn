@@ -17,6 +17,16 @@ export interface Project {
   dueDate: string;
   escrow: boolean;
 }
+export interface Project1 {
+  id: number;
+  title: string;
+  client: string;
+  budget: number;
+  progress: number;
+  status: string;
+  dueDate: string;
+  escrow: boolean;
+}
 
 export interface ActivityItemProps {
   activity: Activity;
@@ -35,6 +45,14 @@ export interface StatsCardProps {
 }
 
 export const MOCK_STATS = {
+  totalEarnings: 15420,
+  totalProjects: 12,
+  activeProjects: 3,
+  completionRate: 92,
+  monthlyEarnings: 3200,
+  pendingPayments: 1800
+};
+export const MOCK_STATS2 = {
   totalEarnings: 15420,
   totalProjects: 12,
   activeProjects: 3,

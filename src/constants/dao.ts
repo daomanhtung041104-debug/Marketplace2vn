@@ -13,6 +13,21 @@ export interface Proposal {
   creator: string;
   createdAt: string;
 }
+export interface Proposal1 {
+  id: number;
+  title: string;
+  description: string;
+  category: string;
+  status: string;
+  endDate: string;
+  totalVotes: number;
+  yesVotes: number;
+  noVotes: number;
+  quorum: number;
+  creator: string;
+  createdAt: string;
+}
+
 
 export interface DaoFiltersProps {
   selectedCategory: string;
