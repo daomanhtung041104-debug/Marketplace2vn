@@ -15,6 +15,7 @@ export async function GET(request: Request) {
     const tag = `${CONTRACT_ADDRESS}::${PROFILE_MODULE}::Events`;
     const url = `${APTOS_REST_URL}/v1/accounts/${CONTRACT_ADDRESS}/events/${encodeURIComponent(tag)}/registered?limit=${limit}`;
     const res = await fetch(url);
+    const res = await fetch(url);
     if (!res.ok) return NextResponse.json({ events: [] });
     const events = await res.json() as unknown[];
     const filtered = (events as unknown[]).filter((e) => {
