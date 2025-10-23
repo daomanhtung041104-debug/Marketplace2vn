@@ -102,79 +102,51 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background-secondary/30 to-background flex flex-col relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-primary/10 rounded-full blur-3xl animate-float" />
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-secondary/10 rounded-full blur-3xl animate-float" style={{ animationDelay: '1s' }} />
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-accent/5 rounded-full blur-3xl animate-float" style={{ animationDelay: '2s' }} />
-      </div>
-      
+    <div className="min-h-screen bg-background flex flex-col">
       <Header />
       
-      <main className="flex-1 pt-20 relative z-10">
+      <main className="flex-1 pt-20">
         <Container>
-          <div className="mb-12 text-center">
-            <div className="inline-block">
-              <h1 className="text-5xl lg:text-7xl font-bold text-text-primary mb-6 leading-tight">
-                <span 
-                  style={robotoCondensed}
-                  className="bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent block animate-fade-in-up"
-                >
-                  Dashboard
-                </span>
-              </h1>
-              <div className="w-24 h-1 bg-gradient-primary mx-auto rounded-full mb-6" />
-            </div>
+          <div className="mb-8">
+            <h1 className="text-4xl lg:text-6xl font-bold text-text-primary mb-4 leading-tight">
+              <span 
+                style={robotoCondensed}
+                className=" text-primary block"
+              >
+                Dashboard
+              </span>
+            </h1>
             <p 
               style={robotoCondensed}
-              className="text-xl lg:text-2xl text-text-secondary max-w-3xl mx-auto animate-fade-in-up"
-              style={{ animationDelay: '0.2s' }}
+              className="text-xl lg:text-2xl text-text-secondary max-w-2xl"
             >
-              Quản lý dự án và theo dõi thu nhập của bạn với giao diện hiện đại
+              Quản lý dự án và theo dõi thu nhập của bạn
             </p>
           </div>
 
           <Tabs defaultValue="overview" className="w-full">
-            <div className="bg-background/80 backdrop-blur-md rounded-2xl p-2 mb-8 border border-border/20 shadow-lg">
-              <TabsList className="flex w-full bg-transparent gap-2">
-                <TabsTrigger 
-                  value="overview" 
-                  className="flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-primary data-[state=active]:text-white data-[state=active]:shadow-lg"
-                >
-                  <BarChart3 className="h-5 w-5" />
-                  <span className="font-medium">Tổng quan</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="projects" 
-                  className="flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-primary data-[state=active]:text-white data-[state=active]:shadow-lg"
-                >
-                  <Briefcase className="h-5 w-5" />
-                  <span className="font-medium">Dự án</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="activity" 
-                  className="flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-primary data-[state=active]:text-white data-[state=active]:shadow-lg"
-                >
-                  <Activity className="h-5 w-5" />
-                  <span className="font-medium">Hoạt động</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="profile" 
-                  className="flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-primary data-[state=active]:text-white data-[state=active]:shadow-lg"
-                >
-                  <User className="h-5 w-5" />
-                  <span className="font-medium">DID Profile</span>
-                </TabsTrigger>
-                <TabsTrigger 
-                  value="profile-settings" 
-                  className="flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-primary data-[state=active]:text-white data-[state=active]:shadow-lg"
-                >
-                  <User className="h-5 w-5" />
-                  <span className="font-medium">Cập nhật hồ sơ</span>
-                </TabsTrigger>
-              </TabsList>
-            </div>
+            <TabsList className="flex w-full mb-6">
+              <TabsTrigger value="overview" className="flex items-center gap-2">
+                <BarChart3 className="h-4 w-4" />
+                Tổng quan
+              </TabsTrigger>
+              <TabsTrigger value="projects" className="flex items-center gap-2">
+                <Briefcase className="h-4 w-4" />
+                Dự án
+              </TabsTrigger>
+              <TabsTrigger value="activity" className="flex items-center gap-2">
+                <Activity className="h-4 w-4" />
+                Hoạt động
+              </TabsTrigger>
+              <TabsTrigger value="profile" className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                DID Profile
+              </TabsTrigger>
+              <TabsTrigger value="profile-settings" className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                Cập nhật hồ sơ
+              </TabsTrigger>
+            </TabsList>
 
             <TabsContent value="overview" className="space-y-8">
               {/* Stats Cards */}

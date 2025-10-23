@@ -10,11 +10,9 @@ export function Card({
   hover = false
 }: CardProps) {
   const variants = {
-    default: 'modern-card border border-border/20',
-    elevated: 'modern-card shadow-lg hover:shadow-2xl border border-border/20 hover-lift',
-    outlined: 'modern-card border border-border/20',
-    glass: 'glass-card border border-border/20',
-    gradient: 'bg-gradient-primary border border-primary/20 text-white'
+    default: 'glass-card border border-border',
+    elevated: 'glass-card shadow-lg hover:shadow-xl border border-border',
+    outlined: 'glass-card border border-border'
   };
 
   const paddings = {
@@ -25,10 +23,10 @@ export function Card({
 
   return (
     <div className={cn(
-      'rounded-2xl transition-all duration-300 ease-out',
+      'rounded-xl transition-all duration-300',
       variants[variant],
       paddings[padding],
-      hover && 'hover:scale-[1.02] hover-lift hover-glow',
+      hover && 'hover:scale-105',
       className
     )}>
       {children}
