@@ -136,28 +136,45 @@ export default function DashboardPage() {
           </div>
 
           <Tabs defaultValue="overview" className="w-full">
-            <TabsList className="flex w-full mb-6">
-              <TabsTrigger value="overview" className="flex items-center gap-2">
-                <BarChart3 className="h-4 w-4" />
-                Tổng quan
-              </TabsTrigger>
-              <TabsTrigger value="projects" className="flex items-center gap-2">
-                <Briefcase className="h-4 w-4" />
-                Dự án
-              </TabsTrigger>
-              <TabsTrigger value="activity" className="flex items-center gap-2">
-                <Activity className="h-4 w-4" />
-                Hoạt động
-              </TabsTrigger>
-              <TabsTrigger value="profile" className="flex items-center gap-2">
-                <User className="h-4 w-4" />
-                DID Profile
-              </TabsTrigger>
-              <TabsTrigger value="profile-settings" className="flex items-center gap-2">
-                <User className="h-4 w-4" />
-                Cập nhật hồ sơ
-              </TabsTrigger>
-            </TabsList>
+            <div className="bg-background/80 backdrop-blur-md rounded-2xl p-2 mb-8 border border-border/20 shadow-lg">
+              <TabsList className="flex w-full bg-transparent gap-2">
+                <TabsTrigger 
+                  value="overview" 
+                  className="flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-primary data-[state=active]:text-white data-[state=active]:shadow-lg"
+                >
+                  <BarChart3 className="h-5 w-5" />
+                  <span className="font-medium">Tổng quan</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="projects" 
+                  className="flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-primary data-[state=active]:text-white data-[state=active]:shadow-lg"
+                >
+                  <Briefcase className="h-5 w-5" />
+                  <span className="font-medium">Dự án</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="activity" 
+                  className="flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-primary data-[state=active]:text-white data-[state=active]:shadow-lg"
+                >
+                  <Activity className="h-5 w-5" />
+                  <span className="font-medium">Hoạt động</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="profile" 
+                  className="flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-primary data-[state=active]:text-white data-[state=active]:shadow-lg"
+                >
+                  <User className="h-5 w-5" />
+                  <span className="font-medium">DID Profile</span>
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="profile-settings" 
+                  className="flex items-center gap-3 px-6 py-3 rounded-xl transition-all duration-300 hover:scale-105 data-[state=active]:bg-gradient-primary data-[state=active]:text-white data-[state=active]:shadow-lg"
+                >
+                  <User className="h-5 w-5" />
+                  <span className="font-medium">Cập nhật hồ sơ</span>
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
             <TabsContent value="overview" className="space-y-8">
               {/* Stats Cards */}

@@ -1,10 +1,10 @@
+import AuthSessionProvider from "@/components/providers/SessionProvider";
+import { Toaster } from "@/components/ui/toaster";
+import { ThemeProvider } from "@/contexts/ThemeContext";
+import { WalletProvider } from "@/contexts/WalletContext";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { ThemeProvider } from "@/contexts/ThemeContext";
-import { WalletProvider } from "@/contexts/WalletContext";
-import { Toaster } from "@/components/ui/toaster";
-import AuthSessionProvider from "@/components/providers/SessionProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -79,15 +79,25 @@ export default function RootLayout({
           <ThemeProvider>
             <WalletProvider>
           <div className="fixed inset-0 z-0 pointer-events-none">
+            {/* Animated gradient background */}
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-secondary/5 to-accent/5" />
+            <div className="absolute inset-0 bg-gradient-to-tl from-background via-transparent to-background-secondary/20" />
+            
+            {/* Floating geometric shapes */}
+            <div className="absolute top-20 left-20 w-32 h-32 bg-primary/10 rounded-full blur-xl animate-float" />
+            <div className="absolute top-40 right-20 w-24 h-24 bg-secondary/10 rounded-full blur-xl animate-float" style={{ animationDelay: '1s' }} />
+            <div className="absolute bottom-20 left-1/3 w-40 h-40 bg-accent/10 rounded-full blur-xl animate-float" style={{ animationDelay: '2s' }} />
+            <div className="absolute bottom-40 right-1/3 w-28 h-28 bg-primary/10 rounded-full blur-xl animate-float" style={{ animationDelay: '3s' }} />
+            
+            {/* Subtle logo watermark */}
             <div 
-              className="w-full h-full"
+              className="absolute inset-0 opacity-[0.02]"
               style={{
                 backgroundImage: `url('/images/landing/logo_full.png')`,
                 backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'left center',
-                backgroundSize: '80vh',
+                backgroundPosition: 'center',
+                backgroundSize: '60vh',
                 backgroundAttachment: 'fixed',
-                opacity: 0.05
               }}
             />
           </div>
