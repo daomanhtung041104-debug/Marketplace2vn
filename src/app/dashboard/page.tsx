@@ -23,6 +23,16 @@ const robotoCondensed = {
   fontWeight: 400,
   fontStyle: 'normal',
 };
+const robotoCondensed = {
+  fontFamily: "'Roboto Condensed', sans-serif",
+  fontWeight: 400,
+  fontStyle: 'normal',
+};
+const robotoCondensed = {
+  fontFamily: "'Roboto Condensed', sans-serif",
+  fontWeight: 400,
+  fontStyle: 'normal',
+};
 
 export default function DashboardPage() {
   const { account, connectWallet, isConnecting } = useWallet();
@@ -58,7 +68,7 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <Header />
-        
+
         <main className="flex-1 pt-20">
           <Container>
             <div className="max-w-2xl mx-auto text-center py-20">
@@ -75,8 +85,8 @@ export default function DashboardPage() {
               </div>
 
               <div className="space-y-4">
-                <Button 
-                  size="lg" 
+                <Button
+                  size="lg"
                   onClick={connectWallet}
                   disabled={isConnecting}
                   className="flex items-center gap-2 mx-auto"
@@ -84,7 +94,7 @@ export default function DashboardPage() {
                   <Wallet className="w-5 h-5" />
                   {isConnecting ? 'Đang kết nối...' : 'Kết nối ví Petra'}
                 </Button>
-                
+
                 <div className="text-sm text-muted-foreground">
                   Hoặc{' '}
                   <Link href="/" className="text-primary hover:underline">
@@ -104,19 +114,19 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header />
-      
+
       <main className="flex-1 pt-20">
         <Container>
           <div className="mb-8">
             <h1 className="text-4xl lg:text-6xl font-bold text-text-primary mb-4 leading-tight">
-              <span 
+              <span
                 style={robotoCondensed}
                 className=" text-primary block"
               >
                 Dashboard
               </span>
             </h1>
-            <p 
+            <p
               style={robotoCondensed}
               className="text-xl lg:text-2xl text-text-secondary max-w-2xl"
             >
@@ -151,21 +161,21 @@ export default function DashboardPage() {
             <TabsContent value="overview" className="space-y-6">
               {/* Stats Cards */}
               <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <StatsCard 
-                  title="Tổng thu nhập" 
-                  value={`$${MOCK_STATS.totalEarnings.toLocaleString()}`} 
+                <StatsCard
+                  title="Tổng thu nhập"
+                  value={`$${MOCK_STATS.totalEarnings.toLocaleString()}`}
                 />
-                <StatsCard 
-                  title="Dự án đang thực hiện" 
-                  value={MOCK_STATS.activeProjects} 
+                <StatsCard
+                  title="Dự án đang thực hiện"
+                  value={MOCK_STATS.activeProjects}
                 />
-                <StatsCard 
-                  title="Tỷ lệ hoàn thành" 
-                  value={`${MOCK_STATS.completionRate}%`} 
+                <StatsCard
+                  title="Tỷ lệ hoàn thành"
+                  value={`${MOCK_STATS.completionRate}%`}
                 />
-                <StatsCard 
-                  title="Thanh toán chờ" 
-                  value={`$${MOCK_STATS.pendingPayments.toLocaleString()}`} 
+                <StatsCard
+                  title="Thanh toán chờ"
+                  value={`$${MOCK_STATS.pendingPayments.toLocaleString()}`}
                 />
               </div>
 
@@ -197,11 +207,11 @@ export default function DashboardPage() {
                     Xem tất cả
                   </Button>
                 </div>
-                
+
                 <div className="space-y-4">
                   {MOCK_PROJECTS.map((project) => (
-                    <ProjectCard 
-                      key={project.id} 
+                    <ProjectCard
+                      key={project.id}
                       project={project}
                       getStatusColor={getStatusColor}
                       getStatusText={getStatusText}
@@ -219,7 +229,7 @@ export default function DashboardPage() {
                     Xem tất cả
                   </Button>
                 </div>
-                
+
                 <div className="space-y-4">
                   {MOCK_RECENT_ACTIVITIES.map((activity) => (
                     <ActivityItem key={activity.id} activity={activity} />
