@@ -148,117 +148,81 @@ export default function DashboardPage() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="overview" className="space-y-8">
+            <TabsContent value="overview" className="space-y-6">
               {/* Stats Cards */}
               <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
-                  <StatsCard 
-                    title="Tổng thu nhập" 
-                    value={`$${MOCK_STATS.totalEarnings.toLocaleString()}`} 
-                    description="+12% so với tháng trước"
-                  />
-                </div>
-                <div className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-                  <StatsCard 
-                    title="Dự án đang thực hiện" 
-                    value={MOCK_STATS.activeProjects} 
-                    description="3 dự án sắp hoàn thành"
-                  />
-                </div>
-                <div className="animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
-                  <StatsCard 
-                    title="Tỷ lệ hoàn thành" 
-                    value={`${MOCK_STATS.completionRate}%`} 
-                    description="Xuất sắc!"
-                  />
-                </div>
-                <div className="animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-                  <StatsCard 
-                    title="Thanh toán chờ" 
-                    value={`$${MOCK_STATS.pendingPayments.toLocaleString()}`} 
-                    description="Sẽ được xử lý trong 24h"
-                  />
-                </div>
+                <StatsCard 
+                  title="Tổng thu nhập" 
+                  value={`$${MOCK_STATS.totalEarnings.toLocaleString()}`} 
+                />
+                <StatsCard 
+                  title="Dự án đang thực hiện" 
+                  value={MOCK_STATS.activeProjects} 
+                />
+                <StatsCard 
+                  title="Tỷ lệ hoàn thành" 
+                  value={`${MOCK_STATS.completionRate}%`} 
+                />
+                <StatsCard 
+                  title="Thanh toán chờ" 
+                  value={`$${MOCK_STATS.pendingPayments.toLocaleString()}`} 
+                />
               </div>
 
               {/* Quick Actions */}
-              <Card variant="elevated" className="p-8 animate-fade-in-up" style={{ animationDelay: '0.5s' }}>
-                <div className="text-center mb-8">
-                  <h2 className="text-2xl font-bold text-text-primary mb-2">Thao tác nhanh</h2>
-                  <p className="text-text-secondary">Quản lý công việc của bạn một cách hiệu quả</p>
-                </div>
-                <div className="grid md:grid-cols-4 gap-6">
-                  <Button variant="gradient" className="h-20 flex flex-col gap-3 group">
-                    <Briefcase className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                    <span className="font-medium">Tạo dự án mới</span>
+              <Card variant="outlined" className="p-6">
+                <h2 className="text-xl font-semibold text-text-primary mb-4">Thao tác nhanh</h2>
+                <div className="grid md:grid-cols-4 gap-4">
+                  <Button variant="outline" className="h-16 flex flex-col gap-2">
+                    <span className="text-sm">Tạo dự án mới</span>
                   </Button>
-                  <Button variant="outline" className="h-20 flex flex-col gap-3 group hover:bg-green-50 hover:border-green-300 hover:text-green-700">
-                    <DollarSign className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                    <span className="font-medium">Rút tiền</span>
+                  <Button variant="outline" className="h-16 flex flex-col gap-2">
+                    <span className="text-sm">Rút tiền</span>
                   </Button>
-                  <Button variant="outline" className="h-20 flex flex-col gap-3 group hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700">
-                    <BarChart3 className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                    <span className="font-medium">Xem báo cáo</span>
+                  <Button variant="outline" className="h-16 flex flex-col gap-2">
+                    <span className="text-sm">Xem báo cáo</span>
                   </Button>
-                  <Button variant="outline" className="h-20 flex flex-col gap-3 group hover:bg-purple-50 hover:border-purple-300 hover:text-purple-700">
-                    <User className="w-6 h-6 group-hover:scale-110 transition-transform" />
-                    <span className="font-medium">Cài đặt</span>
+                  <Button variant="outline" className="h-16 flex flex-col gap-2">
+                    <span className="text-sm">Cài đặt</span>
                   </Button>
                 </div>
               </Card>
             </TabsContent>
 
-            <TabsContent value="projects" className="space-y-8">
-              <Card variant="elevated" className="p-8 animate-fade-in-up">
-                <div className="flex items-center justify-between mb-8">
-                  <div>
-                    <h2 className="text-2xl font-bold text-text-primary mb-2">Dự án đang thực hiện</h2>
-                    <p className="text-text-secondary">Theo dõi tiến độ và quản lý dự án của bạn</p>
-                  </div>
-                  <Button variant="outline" size="sm" className="hover:scale-105">
-                    Xem tất cả
-                  </Button>
-                </div>
-                
-                <div className="space-y-6">
-                  {MOCK_PROJECTS.map((project, index) => (
-                    <div 
-                      key={project.id} 
-                      className="animate-fade-in-up"
-                      style={{ animationDelay: `${index * 0.1}s` }}
-                    >
-                      <ProjectCard 
-                        project={project}
-                        getStatusColor={getStatusColor}
-                        getStatusText={getStatusText}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="activity" className="space-y-8">
-              <Card variant="elevated" className="p-8 animate-fade-in-up">
-                <div className="flex items-center justify-between mb-8">
-                  <div>
-                    <h2 className="text-2xl font-bold text-text-primary mb-2">Hoạt động gần đây</h2>
-                    <p className="text-text-secondary">Cập nhật mới nhất về dự án và giao dịch</p>
-                  </div>
-                  <Button variant="outline" size="sm" className="hover:scale-105">
+            <TabsContent value="projects" className="space-y-6">
+              <Card variant="outlined" className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-semibold text-text-primary">Dự án đang thực hiện</h2>
+                  <Button variant="outline" size="sm">
                     Xem tất cả
                   </Button>
                 </div>
                 
                 <div className="space-y-4">
-                  {MOCK_RECENT_ACTIVITIES.map((activity, index) => (
-                    <div 
-                      key={activity.id}
-                      className="animate-fade-in-up"
-                      style={{ animationDelay: `${index * 0.1}s` }}
-                    >
-                      <ActivityItem activity={activity} />
-                    </div>
+                  {MOCK_PROJECTS.map((project) => (
+                    <ProjectCard 
+                      key={project.id} 
+                      project={project}
+                      getStatusColor={getStatusColor}
+                      getStatusText={getStatusText}
+                    />
+                  ))}
+                </div>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="activity" className="space-y-6">
+              <Card variant="outlined" className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-semibold text-text-primary">Hoạt động gần đây</h2>
+                  <Button variant="outline" size="sm">
+                    Xem tất cả
+                  </Button>
+                </div>
+                
+                <div className="space-y-4">
+                  {MOCK_RECENT_ACTIVITIES.map((activity) => (
+                    <ActivityItem key={activity.id} activity={activity} />
                   ))}
                 </div>
               </Card>
