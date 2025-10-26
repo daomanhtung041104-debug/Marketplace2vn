@@ -10,15 +10,17 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       <Header />
-      
+
       <main>
         <Hero />
         <HowItWorks />
         <PersonaSwitcher />
+        <PersonaSwitcher />
+        <TrustNumbers />
         <TrustNumbers />
         <FAQ />
       </main>
-      
+
       <Footer />
     </div>
   );
