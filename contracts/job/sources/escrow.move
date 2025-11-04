@@ -1,306 +1,719 @@
 module job_work_board::escrow {
     use std::option::{Self, Option};
+    use std::string::String;
     use std::vector;
     use aptos_framework::signer;
     use aptos_framework::coin;
     use aptos_framework::aptos_coin::AptosCoin;
     use aptos_framework::timestamp;
+    use aptos_framework::account;
+    use aptos_std::table::{Self, Table};
     use job_work_board::role;
     use job_work_board::reputation;
 
-    const E_ROLE_REQUIRED: u64 = 1;
-    const E_ALREADY_JOINED: u64 = 2;
-    const E_NOT_PARTY: u64 = 3;
-    const E_INVALID_STATE: u64 = 4;
-    const E_OUT_OF_BOUNDS: u64 = 5;
-    const E_NOT_SUBMITTED: u64 = 6;
-    const E_TOO_EARLY: u64 = 7;
+    friend job_work_board::dispute;
 
-    const OCTA: u64 = 100_000_000; // 1 APT = 1e8 Octas
+    const OCTA: u64 = 100_000_000;
+    const STAKE_AMOUNT: u64 = 1 * OCTA;
+    const POSTER_FEE: u64 = 15 * OCTA / 10; // 1.5 APT
+    const FREELANCER_FEE: u64 = 6 * OCTA / 10; // 0.6 APT
 
-    struct Milestone has store {
-        amount: u64,
-        deadline_sec: u64,
-        submitted: bool,
-        approved: bool,
-        disputed: bool,
-        released: bool,
+    enum JobState has copy, drop, store {
+        Posted,
+        InProgress,
+        Completed,
+        Cancelled,
+        Disputed
     }
 
-    struct Escrow has key, store {
+    enum MilestoneStatus has copy, drop, store {
+        Pending,
+        Submitted,
+        Accepted,
+        Locked,
+        Withdrawn
+    }
+
+    struct Milestone has store {
+        id: u64,
+        amount: u64,
+        duration: u64,  
+        deadline: u64,  
+        review_period: u64,  
+        review_deadline: u64,  
+        status: MilestoneStatus,
+        evidence_cid: Option<String>
+    }
+
+    struct Job has key, store {
         id: u64,
         poster: address,
         freelancer: Option<address>,
-        cid: vector<u8>,
-        total_amount: u64,
+        cid: String,
+        poster_stake: u64,
+        freelancer_stake: u64,
+        total_escrow: u64,
         milestones: vector<Milestone>,
-        locked: bool,
-        stake_poster: u64,
-        stake_freelancer: u64,
-        dispute_pool: u64,
+        state: JobState,
+        dispute_id: Option<u64>,
+        dispute_winner: Option<bool>,  
+        apply_deadline: u64,  
+        started_at: Option<u64>,  
         job_funds: coin::Coin<AptosCoin>,
         stake_pool: coin::Coin<AptosCoin>,
-        dispute_pool_coin: coin::Coin<AptosCoin>,
-        cancel_poster: bool,
-        cancel_freelancer: bool,
+        dispute_pool: coin::Coin<AptosCoin>,
+        mutual_cancel_requested_by: Option<address>,  
+        freelancer_withdraw_requested_by: Option<address>,  
     }
 
     struct EscrowStore has key {
-        next_id: u64,
-        table: aptos_std::table::Table<u64, Escrow>,
+        table: Table<u64, Job>,
+        next_job_id: u64,
+        events: aptos_framework::event::EventHandle<ClaimTimeoutEvent>
     }
 
-    public fun init(admin: &signer) {
-        if (!exists<EscrowStore>(signer::address_of(admin))) {
-            move_to(admin, EscrowStore { next_id: 1, table: aptos_std::table::new<u64, Escrow>() });
-        }
+    struct ClaimTimeoutEvent has drop, store {
+        job_id: u64,
+        milestone_id: u64,
+        claimed_by: address,
+        claimed_at: u64,
+        freelancer_stake_claimed: u64
     }
 
-    public fun create_job(store_addr: address, poster: &signer, cid: vector<u8>, milestone_amounts: vector<u64>, milestone_deadlines: vector<u64>, deposit_total_octas: u64) acquires EscrowStore {
-        let a = signer::address_of(poster);
-        assert!(role::has_poster(a), E_ROLE_REQUIRED);
-        let n = vector::length(&milestone_amounts);
-        assert!(n > 0 && n == vector::length(&milestone_deadlines), E_OUT_OF_BOUNDS);
-        // Collect funds: total escrow + poster stake 1 APT + system fee 1.5 APT
-        let dep = coin::withdraw<AptosCoin>(poster, deposit_total_octas);
-        let stake = coin::withdraw<AptosCoin>(poster, 1 * OCTA);
-        let fee = coin::withdraw<AptosCoin>(poster, 15 * OCTA / 10);
-        let store = borrow_global_mut<EscrowStore>(store_addr);
-        let id = store.next_id;
-        store.next_id = id + 1;
-        let milestones = vector::empty<Milestone>();
-        let i = 0;
+    fun init_module(admin: &signer) {
+        move_to(admin, EscrowStore {
+            table: table::new(),
+            next_job_id: 1,
+            events: account::new_event_handle<ClaimTimeoutEvent>(admin)
+        });
+    }
+
+    public entry fun create_job(
+        poster: &signer,
+        cid: String,
+        milestone_deadlines: vector<u64>,
+        milestone_amounts: vector<u64>,
+        milestone_review_periods: vector<u64>,
+        poster_deposit: u64,
+        apply_deadline: u64
+    ) acquires EscrowStore {
+        let poster_addr = signer::address_of(poster);
+        assert!(role::has_poster(poster_addr), 1);
+
+        let n = vector::length(&milestone_deadlines);
+        assert!(n > 0 && n == vector::length(&milestone_amounts), 1);
+        assert!(n == vector::length(&milestone_review_periods), 1);
+
         let total_check = 0;
-        while (i < n) {
-            let amt = *vector::borrow(&milestone_amounts, i);
-            let dl = *vector::borrow(&milestone_deadlines, i);
-            vector::push_back(&mut milestones, Milestone { amount: amt, deadline_sec: dl, submitted: false, approved: false, disputed: false, released: false });
-            total_check = total_check + amt;
-            i = i + 1;
-        };
-        assert!(total_check == deposit_total_octas, E_OUT_OF_BOUNDS);
-        let escrow = Escrow { id, poster: a, freelancer: option::none<address>(), cid, total_amount: deposit_total_octas, milestones, locked: false, stake_poster: 1 * OCTA, stake_freelancer: 0, dispute_pool: 15 * OCTA / 10, job_funds: dep, stake_pool: stake, dispute_pool_coin: fee, cancel_poster: false, cancel_freelancer: false };
-        aptos_std::table::add(&mut store.table, id, escrow);
-    }
-
-    public fun join_as_freelancer(store_addr: address, freelancer: &signer, escrow_id: u64) acquires EscrowStore {
-        let b = signer::address_of(freelancer);
-        assert!(role::has_freelancer(b), E_ROLE_REQUIRED);
-        let store = borrow_global_mut<EscrowStore>(store_addr);
-        let e = aptos_std::table::borrow_mut(&mut store.table, escrow_id);
-        assert!(option::is_none(&e.freelancer), E_ALREADY_JOINED);
-        // stake 1 APT + system fee 0.6 APT
-        let c_stake = coin::withdraw<AptosCoin>(freelancer, 1 * OCTA);
-        let c_fee = coin::withdraw<AptosCoin>(freelancer, 6 * OCTA / 10);
-        e.freelancer = option::some(b);
-        e.locked = true;
-        e.stake_freelancer = 1 * OCTA;
-        e.dispute_pool = e.dispute_pool + 6 * OCTA / 10;
-        coin::merge<AptosCoin>(&mut e.stake_pool, c_stake);
-        coin::merge<AptosCoin>(&mut e.dispute_pool_coin, c_fee);
-    }
-
-    public fun submit_milestone(store_addr: address, freelancer: &signer, escrow_id: u64, index: u64) acquires EscrowStore {
-        let addr = signer::address_of(freelancer);
-        let store = borrow_global_mut<EscrowStore>(store_addr);
-        let e = aptos_std::table::borrow_mut(&mut store.table, escrow_id);
-        assert!(option::is_some(&e.freelancer) && option::borrow(&e.freelancer) == &addr, E_NOT_PARTY);
-        let i = index;
-        let m = vector::borrow_mut(&mut e.milestones, i);
-        assert!(!m.submitted && !m.disputed && !m.released, E_INVALID_STATE);
-        m.submitted = true;
-    }
-
-    public fun approve_milestone(store_addr: address, poster: &signer, escrow_id: u64, index: u64) acquires EscrowStore {
-        let a = signer::address_of(poster);
-        let store = borrow_global_mut<EscrowStore>(store_addr);
-        let e = aptos_std::table::borrow_mut(&mut store.table, escrow_id);
-        assert!(e.poster == a, E_NOT_PARTY);
-        let i = index;
-        let m = vector::borrow_mut(&mut e.milestones, i);
-        assert!(m.submitted && !m.approved && !m.disputed && !m.released, E_INVALID_STATE);
-        m.approved = true;
-        m.released = true;
-        // Payout to freelancer from job_funds
-        if (option::is_some(&e.freelancer)) {
-            let b = *option::borrow(&e.freelancer);
-            let pay = coin::extract<AptosCoin>(&mut e.job_funds, m.amount);
-            coin::deposit<AptosCoin>(b, pay);
-        };
-        // Payout to freelancer (logical accounting only)
-        // Increase freelancer rep when last milestone approved
-        if (i + 1 == vector::length(&e.milestones)) {
-            if (option::is_some(&e.freelancer)) {
-                let b = *option::borrow(&e.freelancer);
-                reputation::inc_freelancer(store_addr, b, 2);
-                reputation::inc_poster(store_addr, e.poster, 2);
-                // Return stakes to both parties
-                let back_poster = coin::extract<AptosCoin>(&mut e.stake_pool, 1 * OCTA);
-                coin::deposit<AptosCoin>(e.poster, back_poster);
-                let back_freelancer = coin::extract<AptosCoin>(&mut e.stake_pool, 1 * OCTA);
-                coin::deposit<AptosCoin>(b, back_freelancer);
-                e.stake_poster = 0;
-                e.stake_freelancer = 0;
-            };
-        };
-    }
-
-    public fun auto_approve_if_poster_inactive(store_addr: address, freelancer: &signer, escrow_id: u64, index: u64, confirm_window_sec: u64) acquires EscrowStore {
-        let addr = signer::address_of(freelancer);
-        let store = borrow_global_mut<EscrowStore>(store_addr);
-        let e = aptos_std::table::borrow_mut(&mut store.table, escrow_id);
-        assert!(option::is_some(&e.freelancer) && option::borrow(&e.freelancer) == &addr, E_NOT_PARTY);
-        let i = index;
-        let m = vector::borrow_mut(&mut e.milestones, i);
-        assert!(m.submitted && !m.approved && !m.disputed && !m.released, E_INVALID_STATE);
-        let now = timestamp::now_seconds();
-        assert!(now > m.deadline_sec + confirm_window_sec, E_TOO_EARLY);
-        m.approved = true;
-        m.released = true;
-        if (option::is_some(&e.freelancer)) {
-            let b = *option::borrow(&e.freelancer);
-            let pay = coin::extract<AptosCoin>(&mut e.job_funds, m.amount);
-            coin::deposit<AptosCoin>(b, pay);
-        };
-        if (i + 1 == vector::length(&e.milestones)) {
-            if (option::is_some(&e.freelancer)) {
-                let b = *option::borrow(&e.freelancer);
-                reputation::inc_freelancer(store_addr, b, 2);
-                reputation::inc_poster(store_addr, e.poster, 2);
-                e.stake_poster = 0;
-                e.stake_freelancer = 0;
-            };
-        };
-    }
-
-    public fun claim_stake_on_miss_deadline(store_addr: address, poster: &signer, escrow_id: u64, index: u64) acquires EscrowStore {
-        let a = signer::address_of(poster);
-        let store = borrow_global_mut<EscrowStore>(store_addr);
-        let e = aptos_std::table::borrow_mut(&mut store.table, escrow_id);
-        assert!(e.poster == a, E_NOT_PARTY);
-        let i = index;
-        let m = vector::borrow(&e.milestones, i);
-        let now = timestamp::now_seconds();
-        assert!(now > m.deadline_sec && !m.submitted && !m.released, E_INVALID_STATE);
-        // Poster takes freelancer stake (1 APT), unlock job for new freelancer
-        let pay = coin::extract<AptosCoin>(&mut e.stake_pool, 1 * OCTA);
-        coin::deposit<AptosCoin>(a, pay);
-        e.stake_freelancer = 0;
-        e.freelancer = option::none<address>();
-        e.locked = false;
-    }
-
-    public fun open_dispute(store_addr: address, poster: &signer, escrow_id: u64, index: u64, evidence_cid: vector<u8>) acquires EscrowStore {
-        let a = signer::address_of(poster);
-        let store = borrow_global_mut<EscrowStore>(store_addr);
-        let e = aptos_std::table::borrow_mut(&mut store.table, escrow_id);
-        assert!(e.poster == a, E_NOT_PARTY);
-        let i = index;
-        let m = vector::borrow_mut(&mut e.milestones, i);
-        assert!(m.submitted && !m.approved && !m.released && !m.disputed, E_INVALID_STATE);
-        m.disputed = true;
-        if (option::is_some(&e.freelancer)) {
-            let b = *option::borrow(&e.freelancer);
-            job_work_board::dispute::open(store_addr, poster, escrow_id, b, evidence_cid);
-            job_work_board::dispute::set_milestone_index(store_addr, poster, escrow_id, i);
-        }
-    }
-
-    /// Called by dispute module after decision: winner 1 = poster, 2 = freelancer
-    public fun apply_dispute_result(store_addr: address, escrow_id: u64, index: u64, winner: u8) acquires EscrowStore {
-        let store = borrow_global_mut<EscrowStore>(store_addr);
-        let e = aptos_std::table::borrow_mut(&mut store.table, escrow_id);
-        let i = index;
-        let m = vector::borrow_mut(&mut e.milestones, i);
-        assert!(m.disputed && !m.released, E_INVALID_STATE);
-        if (winner == 1) {
-            // poster wins: transfer B's stake (1 APT) to A
-            if (e.stake_freelancer > 0) {
-                let give = coin::extract<AptosCoin>(&mut e.stake_pool, 1 * OCTA);
-                coin::deposit<AptosCoin>(e.poster, give);
-                e.stake_freelancer = 0;
-            };
-            // release this milestone back to poster: move funds from job_funds to poster
-            let refund = coin::extract<AptosCoin>(&mut e.job_funds, m.amount);
-            coin::deposit<AptosCoin>(e.poster, refund);
-            m.disputed = false;
-            m.released = true;
-        } else if (winner == 2) {
-            // freelancer wins: release milestone to freelancer
-            m.approved = true;
-            m.released = true;
-            m.disputed = false;
-        };
-    }
-
-    public fun poster_request_cancel(store_addr: address, poster: &signer, escrow_id: u64) acquires EscrowStore {
-        let a = signer::address_of(poster);
-        let store = borrow_global_mut<EscrowStore>(store_addr);
-        let e = aptos_std::table::borrow_mut(&mut store.table, escrow_id);
-        assert!(e.poster == a, E_NOT_PARTY);
-        e.cancel_poster = true;
-        if (e.cancel_poster && e.cancel_freelancer) {
-            // consensual cancel (poster requested): refund job escrow to A, all stakes to B
-            let amt_job = coin::value<AptosCoin>(&e.job_funds);
-            if (amt_job > 0) { let refund = coin::extract<AptosCoin>(&mut e.job_funds, amt_job); coin::deposit<AptosCoin>(a, refund); };
-            if (option::is_some(&e.freelancer)) {
-                let b = *option::borrow(&e.freelancer);
-                let amt_stake = coin::value<AptosCoin>(&e.stake_pool);
-                if (amt_stake > 0) { let give = coin::extract<AptosCoin>(&mut e.stake_pool, amt_stake); coin::deposit<AptosCoin>(b, give); };
-                e.stake_poster = 0; e.stake_freelancer = 0;
-            };
-            e.freelancer = option::none<address>(); e.locked = false;
-        }
-    }
-
-    public fun freelancer_request_cancel(store_addr: address, freelancer: &signer, escrow_id: u64) acquires EscrowStore {
-        let b = signer::address_of(freelancer);
-        let store = borrow_global_mut<EscrowStore>(store_addr);
-        let e = aptos_std::table::borrow_mut(&mut store.table, escrow_id);
-        assert!(option::is_some(&e.freelancer) && option::borrow(&e.freelancer) == &b, E_NOT_PARTY);
-        e.cancel_freelancer = true;
-        if (e.cancel_poster && e.cancel_freelancer) {
-            // consensual cancel (freelancer requested): stakes to A, job funds remain for next freelancer
-            let amt_stake = coin::value<AptosCoin>(&e.stake_pool);
-            if (amt_stake > 0) { let give = coin::extract<AptosCoin>(&mut e.stake_pool, amt_stake); coin::deposit<AptosCoin>(e.poster, give); };
-            e.stake_poster = 0; e.stake_freelancer = 0;
-            e.freelancer = option::none<address>(); e.locked = false;
-        }
-    }
-
-    /// Withdraw part (or all) of dispute fees to a treasury signer address
-    public fun withdraw_dispute_fees(store_addr: address, treasury: &signer, escrow_id: u64, amount: u64) acquires EscrowStore {
-        let to = signer::address_of(treasury);
-        let store = borrow_global_mut<EscrowStore>(store_addr);
-        let e = aptos_std::table::borrow_mut(&mut store.table, escrow_id);
-        let val = coin::value<AptosCoin>(&e.dispute_pool_coin);
-        let take = if (amount == 0 || amount > val) { val } else { amount };
-        if (take > 0) { let c = coin::extract<AptosCoin>(&mut e.dispute_pool_coin, take); coin::deposit<AptosCoin>(to, c); };
-    }
-
-    /// Convenience: withdraw all dispute fees to treasury
-    public fun withdraw_all_dispute_fees(store_addr: address, treasury: &signer, escrow_id: u64) acquires EscrowStore {
-        withdraw_dispute_fees(store_addr, treasury, escrow_id, 0);
-    }
-
-    public fun unlock_non_disputed_to_poster(store_addr: address, poster: &signer, escrow_id: u64) acquires EscrowStore {
-        let a = signer::address_of(poster);
-        let store = borrow_global_mut<EscrowStore>(store_addr);
-        let e = aptos_std::table::borrow_mut(&mut store.table, escrow_id);
-        assert!(e.poster == a, E_NOT_PARTY);
-        // Mark unreleased and not disputed milestones as released back to poster with real transfer
-        let n = vector::length(&e.milestones);
         let i = 0;
         while (i < n) {
-            let m = vector::borrow_mut(&mut e.milestones, i);
-            if (!m.released && !m.disputed) {
-                let refund = coin::extract<AptosCoin>(&mut e.job_funds, m.amount);
-                coin::deposit<AptosCoin>(a, refund);
-                m.released = true;
+            total_check = total_check + *vector::borrow(&milestone_amounts, i);
+            i = i + 1;
+        };
+        assert!(total_check == poster_deposit, 1);
+
+        let job_funds = coin::withdraw<AptosCoin>(poster, poster_deposit);
+        let stake = coin::withdraw<AptosCoin>(poster, STAKE_AMOUNT);
+        let fee = coin::withdraw<AptosCoin>(poster, POSTER_FEE);
+
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job_id = store.next_job_id;
+        store.next_job_id = store.next_job_id + 1;
+        let milestones = vector::empty<Milestone>();
+        i = 0;
+        while (i < n) {
+            let deadline_duration = *vector::borrow(&milestone_deadlines, i);
+            let review_period = *vector::borrow(&milestone_review_periods, i);
+            vector::push_back(&mut milestones, Milestone {
+                id: i,
+                amount: *vector::borrow(&milestone_amounts, i),
+                duration: deadline_duration,  
+                deadline: 0,  
+                review_period,
+                review_deadline: 0,
+                status: MilestoneStatus::Pending,
+                evidence_cid: option::none()
+            });
+            i = i + 1;
+        };
+
+        table::add(&mut store.table, job_id, Job {
+            id: job_id,
+            poster: poster_addr,
+            freelancer: option::none(),
+            cid,
+            poster_stake: STAKE_AMOUNT,
+            freelancer_stake: 0,
+            total_escrow: poster_deposit,
+            milestones,
+            state: JobState::Posted,
+            dispute_id: option::none(),
+            dispute_winner: option::none(),
+            apply_deadline,
+            started_at: option::none(),
+            job_funds,
+            stake_pool: stake,
+            mutual_cancel_requested_by: option::none(),
+            dispute_pool: fee,
+            freelancer_withdraw_requested_by: option::none(),
+        });
+    }
+
+    public entry fun apply_job(freelancer: &signer, job_id: u64) acquires EscrowStore {
+        let freelancer_addr = signer::address_of(freelancer);
+        assert!(role::has_freelancer(freelancer_addr), 1);
+
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+        assert!(freelancer_addr != job.poster, 3);
+        
+        let now = timestamp::now_seconds();
+        assert!(now <= job.apply_deadline, 2); 
+        assert!(option::is_none(&job.freelancer), 1);
+        assert!(job.state == JobState::Posted, 1);
+        assert!(job.freelancer_stake == 0, 1);
+        let stake = coin::withdraw<AptosCoin>(freelancer, STAKE_AMOUNT);
+        let fee = coin::withdraw<AptosCoin>(freelancer, FREELANCER_FEE);
+        
+        job.started_at = option::some(now);
+        
+        let len = vector::length(&job.milestones);
+        if (len > 0) {
+            let first_milestone = vector::borrow_mut(&mut job.milestones, 0);
+            first_milestone.deadline = now + first_milestone.duration;
+        };
+        
+        job.freelancer = option::some(freelancer_addr);
+        job.freelancer_stake = STAKE_AMOUNT;
+        job.state = JobState::InProgress;
+        
+        coin::merge(&mut job.stake_pool, stake);
+        coin::merge(&mut job.dispute_pool, fee);
+    }
+
+
+    public entry fun submit_milestone(
+        freelancer: &signer,
+        job_id: u64,
+        milestone_id: u64,
+        evidence_cid: String
+    ) acquires EscrowStore {
+        let freelancer_addr = signer::address_of(freelancer);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        assert!(option::is_some(&job.freelancer) && *option::borrow(&job.freelancer) == freelancer_addr, 1);
+        assert!(job.state == JobState::InProgress, 1);
+
+        let i = find_milestone_index(&job.milestones, milestone_id);
+        
+        if (i > 0) {
+            let prev_milestone = vector::borrow(&job.milestones, i - 1);
+            assert!(prev_milestone.status == MilestoneStatus::Accepted, 2); 
+        };
+        
+        let milestone_check = vector::borrow(&job.milestones, i);
+        assert!(milestone_check.status == MilestoneStatus::Pending, 1);
+        assert!(milestone_check.deadline > 0, 3); // E_MILESTONE_DEADLINE_NOT_SET
+        
+        let milestone = vector::borrow_mut(&mut job.milestones, i);
+        let now = timestamp::now_seconds();
+        
+        milestone.status = MilestoneStatus::Submitted;
+        milestone.evidence_cid = option::some(evidence_cid);
+        milestone.review_deadline = now + milestone.review_period;
+    }
+
+    public entry fun confirm_milestone(poster: &signer, job_id: u64, milestone_id: u64) acquires EscrowStore {
+        let poster_addr = signer::address_of(poster);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        assert!(job.poster == poster_addr, 1);
+        assert!(job.state == JobState::InProgress, 1);
+
+        let i = find_milestone_index(&job.milestones, milestone_id);
+        let milestone = vector::borrow_mut(&mut job.milestones, i);
+        assert!(milestone.status == MilestoneStatus::Submitted, 1);
+
+        let now = timestamp::now_seconds();
+        assert!(now <= milestone.review_deadline, 1);
+
+        milestone.status = MilestoneStatus::Accepted;
+
+        if (option::is_some(&job.freelancer)) {
+            let freelancer = *option::borrow(&job.freelancer);
+            process_milestone_payment(job, milestone.amount, freelancer);
+            set_next_milestone_deadline(job, i);
+        };
+
+        if (are_all_milestones_accepted(&job.milestones)) {
+            job.state = JobState::Completed;
+            return_stakes(job);
+        };
+    }
+
+    public entry fun reject_milestone(poster: &signer, job_id: u64, milestone_id: u64) acquires EscrowStore {
+        let poster_addr = signer::address_of(poster);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        assert!(job.poster == poster_addr, 1);
+        assert!(job.state == JobState::InProgress, 1);
+
+        let i = find_milestone_index(&job.milestones, milestone_id);
+        let milestone = vector::borrow_mut(&mut job.milestones, i);
+        assert!(milestone.status == MilestoneStatus::Submitted, 1);
+
+        let now = timestamp::now_seconds();
+        assert!(now <= milestone.review_deadline, 1);
+
+        milestone.status = MilestoneStatus::Locked;
+        job.state = JobState::Disputed;
+    }
+
+    public entry fun claim_timeout(s: &signer, job_id: u64, milestone_id: u64) acquires EscrowStore {
+        let caller = signer::address_of(s);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        let i = find_milestone_index(&job.milestones, milestone_id);
+        let milestone = vector::borrow_mut(&mut job.milestones, i);
+        let now = timestamp::now_seconds();
+
+        if (milestone.status == MilestoneStatus::Pending) {
+            // Poster can claim timeout if freelancer didn't submit by deadline
+            assert!(job.poster == caller, 1);
+            assert!(job.state != JobState::Cancelled, 1);
+            assert!(now > milestone.deadline, 1);
+            
+            let stake_claimed = job.freelancer_stake;
+            if (job.freelancer_stake > 0) {
+                let penalty = coin::extract(&mut job.stake_pool, job.freelancer_stake);
+                coin::deposit(caller, penalty);
+                job.freelancer_stake = 0;
+            };
+            job.state = JobState::Cancelled;
+            
+            aptos_framework::event::emit_event(
+                &mut store.events,
+                ClaimTimeoutEvent {
+                    job_id,
+                    milestone_id,
+                    claimed_by: caller,
+                    claimed_at: now,
+                    freelancer_stake_claimed: stake_claimed
+                }
+            );
+        } else if (milestone.status == MilestoneStatus::Submitted) {
+            assert!(option::is_some(&job.freelancer) && *option::borrow(&job.freelancer) == caller, 1);
+            assert!(now > milestone.review_deadline, 1);
+            milestone.status = MilestoneStatus::Accepted;
+            
+            let freelancer = *option::borrow(&job.freelancer);
+            process_milestone_payment(job, milestone.amount, freelancer);
+
+            if (are_all_milestones_accepted(&job.milestones)) {
+                job.state = JobState::Completed;
+                return_stakes(job);
+            };
+        };
+    }
+
+    public entry fun unlock_non_disputed_milestones(poster: &signer, job_id: u64) acquires EscrowStore {
+        let poster_addr = signer::address_of(poster);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        assert!(job.poster == poster_addr, 1);
+        assert!(job.state == JobState::Disputed, 1);
+
+        let len = vector::length(&job.milestones);
+        let i = 0;
+
+        while (i < len) {
+            let milestone = vector::borrow_mut(&mut job.milestones, i);
+            if (milestone.status != MilestoneStatus::Locked && milestone.status != MilestoneStatus::Withdrawn) {
+                if (milestone.status == MilestoneStatus::Pending || milestone.status == MilestoneStatus::Submitted) {
+                    let available = coin::value(&job.job_funds);
+                    if (available >= milestone.amount) {
+                        let refund = coin::extract(&mut job.job_funds, milestone.amount);
+                        coin::deposit(poster_addr, refund);
+                        milestone.status = MilestoneStatus::Withdrawn;
+                    };
+                };
             };
             i = i + 1;
         };
+    }
+
+    public entry fun mutual_cancel(s: &signer, job_id: u64) acquires EscrowStore {
+        let caller = signer::address_of(s);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        assert!(option::is_some(&job.freelancer), 1);
+        assert!(caller == job.poster, 1);
+        assert!(job.state != JobState::Disputed, 4); 
+        assert!(option::is_none(&job.dispute_id), 4); 
+        assert!(option::is_none(&job.dispute_winner), 4); 
+        assert!(!has_milestone_submitted(&job.milestones), 5); 
+        
+        if (option::is_some(&job.mutual_cancel_requested_by)) {
+            return
+        };
+        
+        job.mutual_cancel_requested_by = option::some(caller);
+    }
+
+    public entry fun accept_mutual_cancel(freelancer: &signer, job_id: u64) acquires EscrowStore {
+        let freelancer_addr = signer::address_of(freelancer);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        assert!(option::is_some(&job.freelancer) && *option::borrow(&job.freelancer) == freelancer_addr, 1);
+        assert!(option::is_some(&job.mutual_cancel_requested_by), 1);
+        assert!(job.state != JobState::Disputed, 4); 
+        assert!(option::is_none(&job.dispute_id), 4); 
+        assert!(option::is_none(&job.dispute_winner), 4); 
+        assert!(!has_milestone_submitted(&job.milestones), 5);
+        
+        let requester = *option::borrow(&job.mutual_cancel_requested_by);
+        assert!(requester == job.poster, 1);  
+        
+        let refund = coin::extract_all(&mut job.job_funds);
+        coin::deposit(job.poster, refund);
+
+        if (job.poster_stake > 0) {
+            let poster_stake_back = coin::extract(&mut job.stake_pool, job.poster_stake);
+            coin::deposit(freelancer_addr, poster_stake_back);
+            job.poster_stake = 0;
+        };
+        if (job.freelancer_stake > 0) {
+            let freelancer_stake_back = coin::extract(&mut job.stake_pool, job.freelancer_stake);
+            coin::deposit(freelancer_addr, freelancer_stake_back);
+            job.freelancer_stake = 0;
+        };
+        
+        job.freelancer = option::none();
+        job.state = JobState::Cancelled;
+        job.mutual_cancel_requested_by = option::none();
+        job.freelancer_withdraw_requested_by = option::none();  
+    }
+
+    public entry fun reject_mutual_cancel(freelancer: &signer, job_id: u64) acquires EscrowStore {
+        let freelancer_addr = signer::address_of(freelancer);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        assert!(option::is_some(&job.freelancer) && *option::borrow(&job.freelancer) == freelancer_addr, 1);
+        assert!(option::is_some(&job.mutual_cancel_requested_by), 1);
+        
+        let requester = *option::borrow(&job.mutual_cancel_requested_by);
+        assert!(requester == job.poster, 1);  
+        
+        job.mutual_cancel_requested_by = option::none();
+    }
+
+    public entry fun poster_withdraw_unfilled_job(poster: &signer, job_id: u64) acquires EscrowStore {
+        let poster_addr = signer::address_of(poster);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        assert!(job.poster == poster_addr, 1);
+        
+        let now = timestamp::now_seconds();
+        let has_no_freelancer = option::is_none(&job.freelancer);
+        let deadline_passed = job.apply_deadline == 0 || now >= job.apply_deadline;
+
+        assert!(has_no_freelancer || deadline_passed, 2);
+
+        let job_funds_refund = coin::extract_all(&mut job.job_funds);
+        coin::deposit(poster_addr, job_funds_refund);
+
+        if (job.poster_stake > 0) {
+            let poster_stake_back = coin::extract(&mut job.stake_pool, job.poster_stake);
+            coin::deposit(poster_addr, poster_stake_back);
+            job.poster_stake = 0;
+        };
+
+        job.state = JobState::Cancelled;
+    }
+
+    public entry fun freelancer_withdraw(freelancer: &signer, job_id: u64) acquires EscrowStore {
+        let freelancer_addr = signer::address_of(freelancer);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        assert!(option::is_some(&job.freelancer) && *option::borrow(&job.freelancer) == freelancer_addr, 1);
+        assert!(job.state != JobState::Disputed, 4); 
+        assert!(option::is_none(&job.dispute_id), 4); 
+        assert!(option::is_none(&job.dispute_winner), 4); 
+        assert!(!has_milestone_submitted(&job.milestones), 5); 
+        
+        if (option::is_some(&job.freelancer_withdraw_requested_by)) {
+            return
+        };
+        
+        job.freelancer_withdraw_requested_by = option::some(freelancer_addr);
+    }
+
+    public entry fun accept_freelancer_withdraw(poster: &signer, job_id: u64) acquires EscrowStore {
+        let poster_addr = signer::address_of(poster);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        assert!(job.poster == poster_addr, 1);
+        assert!(option::is_some(&job.freelancer_withdraw_requested_by), 1);
+        assert!(job.state != JobState::Disputed, 4); 
+        assert!(option::is_none(&job.dispute_id), 4); 
+        assert!(option::is_none(&job.dispute_winner), 4);
+        assert!(!has_milestone_submitted(&job.milestones), 5);
+        
+        let requester = *option::borrow(&job.freelancer_withdraw_requested_by);
+        assert!(option::is_some(&job.freelancer) && *option::borrow(&job.freelancer) == requester, 1);
+        
+        if (job.freelancer_stake > 0) {
+            let penalty = coin::extract(&mut job.stake_pool, job.freelancer_stake);
+            coin::deposit(job.poster, penalty);
+            job.freelancer_stake = 0;
+        };
+        job.freelancer = option::none();
+        job.state = JobState::Posted;
+        job.started_at = option::none();
+        job.mutual_cancel_requested_by = option::none();  
+        job.freelancer_withdraw_requested_by = option::none(); 
+
+        let len = vector::length(&job.milestones);
+        let i = 0;
+        while (i < len) {
+            let milestone = vector::borrow_mut(&mut job.milestones, i);
+            if (milestone.status != MilestoneStatus::Accepted) {
+                milestone.status = MilestoneStatus::Pending;
+                milestone.deadline = 0;
+                milestone.review_deadline = 0;
+                milestone.evidence_cid = option::none();
+            };
+            i = i + 1;
+        };
+    }
+
+    public entry fun reject_freelancer_withdraw(poster: &signer, job_id: u64) acquires EscrowStore {
+        let poster_addr = signer::address_of(poster);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        assert!(job.poster == poster_addr, 1);
+        assert!(option::is_some(&job.freelancer_withdraw_requested_by), 1);
+        
+        let requester = *option::borrow(&job.freelancer_withdraw_requested_by);
+        assert!(option::is_some(&job.freelancer) && *option::borrow(&job.freelancer) == requester, 1);
+        
+        job.freelancer_withdraw_requested_by = option::none();
+    }
+
+    public(friend) fun lock_for_dispute(job_id: u64, _milestone_id: u64, dispute_id: u64) acquires EscrowStore {
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        job.dispute_id = option::some(dispute_id);
+        job.state = JobState::Disputed;
+    }
+
+    public(friend) fun resolve_dispute(
+        job_id: u64,
+        milestone_id: u64,
+        winner_is_freelancer: bool
+    ) acquires EscrowStore {
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        let i = find_milestone_index(&job.milestones, milestone_id);
+        let milestone = vector::borrow_mut(&mut job.milestones, i);
+        milestone.status = MilestoneStatus::Accepted;
+
+        job.dispute_winner = option::some(winner_is_freelancer);
+        job.dispute_id = option::none();
+        
+        if (are_all_milestones_accepted(&job.milestones)) {
+            job.state = JobState::Completed;
+            return_stakes(job);
+        } else {
+            job.state = JobState::InProgress;
+        };
+    }
+
+    fun find_milestone_index(milestones: &vector<Milestone>, milestone_id: u64): u64 {
+        let len = vector::length(milestones);
+        let i = 0;
+        while (i < len) {
+            if (vector::borrow(milestones, i).id == milestone_id) {
+                return i
+            };
+            i = i + 1;
+        };
+        abort 1 
+    }
+
+    fun has_milestone_submitted(milestones: &vector<Milestone>): bool {
+        let len = vector::length(milestones);
+        let i = 0;
+        while (i < len) {
+            if (vector::borrow(milestones, i).status == MilestoneStatus::Submitted) {
+                return true
+            };
+            i = i + 1;
+        };
+        false
+    }
+
+    fun are_all_milestones_accepted(milestones: &vector<Milestone>): bool {
+        let len = vector::length(milestones);
+        let i = 0;
+        let disputed_milestone_idx = len;
+        
+        while (i < len) {
+            if (vector::borrow(milestones, i).status == MilestoneStatus::Locked) {
+                disputed_milestone_idx = i;
+                break
+            };
+            i = i + 1;
+        };
+        
+        let check_until = if (disputed_milestone_idx < len) {
+            disputed_milestone_idx + 1 
+        } else {
+            len 
+        };
+        
+        i = 0;
+        while (i < check_until) {
+            let status = vector::borrow(milestones, i).status;
+            if (status != MilestoneStatus::Accepted && status != MilestoneStatus::Locked && status != MilestoneStatus::Withdrawn) {
+                return false
+            };
+            i = i + 1;
+        };
+        true
+    }
+
+    fun update_reputation(freelancer_addr: address, poster_addr: address) {
+        if (role::has_freelancer(freelancer_addr)) {
+            reputation::inc_utf(freelancer_addr, 1);
+        };
+        if (role::has_poster(poster_addr)) {
+            reputation::inc_utp(poster_addr, 1);
+        };
+    }
+
+    fun process_milestone_payment(
+        job: &mut Job,
+        amount: u64,
+        freelancer_addr: address
+    ) {
+        let payment = coin::extract(&mut job.job_funds, amount);
+        coin::deposit(freelancer_addr, payment);
+        update_reputation(freelancer_addr, job.poster);
+    }
+
+    fun set_next_milestone_deadline(job: &mut Job, current_idx: u64) {
+        let len = vector::length(&job.milestones);
+        let next_idx = current_idx + 1;
+        if (next_idx < len) {
+            let now = timestamp::now_seconds();
+            let next_milestone = vector::borrow_mut(&mut job.milestones, next_idx);
+            if (next_milestone.status == MilestoneStatus::Pending || now < next_milestone.deadline) {
+                next_milestone.deadline = now + next_milestone.duration;
+            };
+        };
+    }
+
+    fun return_stakes(job: &mut Job) {
+        if (job.poster_stake > 0) {
+            let back = coin::extract(&mut job.stake_pool, job.poster_stake);
+            coin::deposit(job.poster, back);
+            job.poster_stake = 0;
+        };
+        if (job.freelancer_stake > 0 && option::is_some(&job.freelancer)) {
+            let freelancer = *option::borrow(&job.freelancer);
+            let back = coin::extract(&mut job.stake_pool, job.freelancer_stake);
+            coin::deposit(freelancer, back);
+            job.freelancer_stake = 0;
+        };
+    }
+
+    public entry fun claim_dispute_payment(
+        freelancer: &signer,
+        job_id: u64,
+        milestone_id: u64
+    ) acquires EscrowStore {
+        let freelancer_addr = signer::address_of(freelancer);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        assert!(option::is_some(&job.freelancer) && *option::borrow(&job.freelancer) == freelancer_addr, 1);
+        assert!(option::is_some(&job.dispute_winner), 1);
+        assert!(*option::borrow(&job.dispute_winner) == true, 1);
+
+        let i = find_milestone_index(&job.milestones, milestone_id);
+        let milestone = vector::borrow_mut(&mut job.milestones, i);
+        assert!(milestone.status == MilestoneStatus::Accepted, 1);
+
+        process_milestone_payment(job, milestone.amount, freelancer_addr);
+        job.dispute_winner = option::none();
+        
+        set_next_milestone_deadline(job, i);
+        
+        if (job.state == JobState::Disputed) {
+            job.state = JobState::InProgress;
+        };
+    }
+
+    public entry fun claim_dispute_refund(
+        poster: &signer,
+        job_id: u64,
+        milestone_id: u64
+    ) acquires EscrowStore {
+        let poster_addr = signer::address_of(poster);
+        let store = borrow_global_mut<EscrowStore>(@job_work_board);
+        let job = table::borrow_mut(&mut store.table, job_id);
+
+        assert!(job.poster == poster_addr, 1);
+        assert!(option::is_some(&job.dispute_winner), 1);
+        assert!(*option::borrow(&job.dispute_winner) == false, 1);
+
+        let i = find_milestone_index(&job.milestones, milestone_id);
+        let milestone = vector::borrow_mut(&mut job.milestones, i);
+        assert!(milestone.status == MilestoneStatus::Accepted, 1);
+
+        let refund = coin::extract(&mut job.job_funds, milestone.amount);
+        coin::deposit(poster_addr, refund);
+
+        if (job.freelancer_stake > 0) {
+            let penalty = coin::extract(&mut job.stake_pool, job.freelancer_stake);
+            coin::deposit(poster_addr, penalty);
+            job.freelancer_stake = 0;
+        };
+
+        job.dispute_winner = option::none();
+        
+        set_next_milestone_deadline(job, i);
+        
+        if (job.state == JobState::Disputed) {
+            job.state = JobState::InProgress;
+        };
+    }
+
+    public fun get_mutual_cancel_requested_by(job_id: u64): Option<address> acquires EscrowStore {
+        let store = borrow_global<EscrowStore>(@job_work_board);
+        let job = table::borrow(&store.table, job_id);
+        job.mutual_cancel_requested_by
+    }
+
+    public fun get_job_parties(job_id: u64): (address, Option<address>) acquires EscrowStore {
+        let store = borrow_global<EscrowStore>(@job_work_board);
+        assert!(table::contains(&store.table, job_id), 1);
+        let job = table::borrow(&store.table, job_id);
+        (job.poster, job.freelancer)
     }
 }
-
-
