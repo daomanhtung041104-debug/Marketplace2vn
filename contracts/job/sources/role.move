@@ -140,5 +140,21 @@ module job_work_board::role {
         });
         table::add(&mut store.proof_hashes, public_signals, addr);
     }
-
+    public fun has_proof(addr: address): bool acquires RoleStore {
+        if (!exists<RoleStore>(@job_work_board)) return false;
+        let store = borrow_global<RoleStore>(@job_work_board);
+        table::contains(&store.proofs, addr)
+    }
+    public fun get_proof(addr: address): Option<CCCDProof> acquires RoleStore {
+        if (!exists<RoleStore>(@job_work_board)) return option::none();
+        let store = borrow_global<RoleStore>(@job_work_board);
+        if (!table::contains(&store.proofs, addr)) return option::none();
+        option::some(*table::borrow(&store.proofs, addr))
+    }
+    public fun get_proof_owner(public_signals: vector<u8>): Option<address> acquires RoleStore {
+        if (!exists<RoleStore>(@job_work_board)) return option::none();
+        let store = borrow_global<RoleStore>(@job_work_board);
+        if (!table::contains(&store.proof_hashes, public_signals)) return option::none();
+        option::some(*table::borrow(&store.proof_hashes, public_signals))
+    }
 }
