@@ -287,5 +287,123 @@ export default function DIDActionsPanel() {
     }
   };
 
-  
+  return (
+    <Card variant="outlined" className="space-y-4 mt-6 bg-white p-4">
+      <div className="text-lg font-bold text-blue-800">Đăng ký vai trò</div>
+      <div className="text-sm text-gray-700">
+        Ví:{' '}
+        {account ? (
+          <span 
+            className="font-bold text-blue-600 cursor-pointer hover:text-blue-800 hover:underline"
+            onClick={() => copyAddress(account)}
+          >
+            {formatAddress(account)}
+          </span>
+        ) : (
+          'Chưa kết nối'
+        )}
+      </div>
+      
+      {loadingRoles ? (
+        <div className="text-xs text-gray-500">Đang tải vai trò...</div>
+      ) : roles.length > 0 ? (
+        <div className="my-2">
+          {roles.map(r => (
+            <div key={r.name} className="rounded p-2 text-xs mb-1 bg-blue-50 text-blue-900">
+              Đã đăng ký: <b>{r.name}</b>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-xs text-gray-500">Chưa đăng ký vai trò nào</div>
+      )}
+
+      {checkingProof ? (
+        <div className="mt-4 text-xs text-gray-500">Đang kiểm tra...</div>
+      ) : (
+        !faceVerified && !showFaceVerification && roles.length === 0 && (
+          <div className="mt-4">
+            <FaceVerification onVerified={handleFaceVerified} />
+          </div>
+        )
+      )}
+
+      {showFaceVerification && verificationSessionId && idInfo && (
+        <div className="mt-4">
+          <VerificationResultDisplay
+            sessionId={verificationSessionId}
+            idInfo={idInfo}
+            onRetry={() => {
+            }}
+            onCancel={handleFaceVerificationCancel}
+            onSuccess={handleFaceVerificationSuccess}
+          />
+        </div>
+      )}
+      
+      {!checkingProof && (faceVerified || roles.length > 0) && (
+        <>
+          {faceVerified && (
+            <div className="mt-4 p-3 bg-green-50 border border-green-300 rounded">
+              <div className="text-xs text-green-700 font-bold mb-2">
+                ✓ Đã xác minh danh tính thành công
+              </div>
+            </div>
+          )}
+          
+          <div className="space-y-3 mt-4">
+            <div>
+              <label className="block text-sm font-bold text-gray-900 mb-1">Vai trò</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-400 bg-white text-sm"
+                value={role}
+                disabled={loading}
+                onChange={e => {
+                  setRole(e.target.value);
+                  if (e.target.value === 'reviewer') {
+                    setDesc('');
+                  }
+                }}
+              >
+                <option value="">Chọn vai trò...</option>
+                <option value="freelancer">Freelancer</option>
+                <option value="poster">Poster</option>
+                <option value="reviewer">Reviewer</option>
+              </select>
+            </div>
+            
+            {role !== 'reviewer' && (
+              <div>
+                <label className="block text-sm font-bold text-gray-900 mb-1">Mô tả</label>
+                <textarea
+                  className="w-full px-3 py-2 border border-gray-400 bg-white text-sm"
+                  rows={3}
+                  value={desc}
+                  disabled={loading}
+                  onChange={e => setDesc(e.target.value)}
+                  placeholder="Giới thiệu về bạn / kỹ năng..."
+                />
+              </div>
+            )}
+            
+            <Button
+              className="w-full"
+              size="sm"
+              variant="outline"
+              onClick={handleRegister}
+              disabled={loading || !role}
+            >
+              {loading ? 'Đang xử lý...' : 'Đăng ký vai trò'}
+            </Button>
+          </div>
+        </>
+      )}
+      
+      {message && (
+        <div className={`text-xs ${message.includes('thành công') ? 'text-green-700' : message.includes('lỗi') || message.includes('Lỗi') ? 'text-red-700' : 'text-gray-700'}`}>
+          {message}
+        </div>
+      )}
+    </Card>
+  );
 }
