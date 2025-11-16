@@ -232,6 +232,12 @@ module job_work_board::escrow {
             assert!(prev_milestone.status == MilestoneStatus::Accepted, 2); 
         };
         
+        let milestone_check = vector::borrow(&job.milestones, i);
+        assert!(milestone_check.status == MilestoneStatus::Pending, 1);
+        assert!(milestone_check.deadline > 0, 3); // E_MILESTONE_DEADLINE_NOT_SET
+        
+        let milestone = vector::borrow_mut(&mut job.milestones, i);
+        let now = timestamp::now_seconds();
         
         milestone.status = MilestoneStatus::Submitted;
         milestone.evidence_cid = option::some(evidence_cid);
@@ -246,16 +252,6 @@ module job_work_board::escrow {
         assert!(job.poster == poster_addr, 1);
         assert!(job.state == JobState::InProgress, 1);
 
-        let now = timestamp::now_seconds();
-        assert!(now <= milestone.review_deadline, 1);
-
-        milestone.status = MilestoneStatus::Accepted;
-
-        if (option::is_some(&job.freelancer)) {
-            let freelancer = *option::borrow(&job.freelancer);
-            process_milestone_payment(job, milestone.amount, freelancer);
-            set_next_milestone_deadline(job, i);
-        };
 
         if (are_all_milestones_accepted(&job.milestones)) {
             job.state = JobState::Completed;
