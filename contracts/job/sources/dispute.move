@@ -125,42 +125,6 @@ module job_work_board::dispute {
             };
             j = j + 1;
         };
-        
-        let has_all_three = option::is_some(&mid_ut_reviewer) && option::is_some(&low_ut_reviewer);
-        
-        assert!(highest_reviewer != poster_addr && highest_reviewer != freelancer_addr, 5);
-        
-        let selected = vector::empty<address>();
-        if (has_all_three) {
-            let mid_reviewer = *option::borrow(&mid_ut_reviewer);
-            let low_reviewer = *option::borrow(&low_ut_reviewer);
-            
-            assert!(mid_reviewer != poster_addr && mid_reviewer != freelancer_addr, 6);
-            assert!(low_reviewer != poster_addr && low_reviewer != freelancer_addr, 7);
-            
-            vector::push_back(&mut selected, highest_reviewer);
-            vector::push_back(&mut selected, mid_reviewer);
-            vector::push_back(&mut selected, low_reviewer);
-        } else {
-            j = 0;
-            while (j < n_eligible) {
-                let r = *vector::borrow(&eligible, j);
-                assert!(r != poster_addr && r != freelancer_addr, 8);
-                let busy_check = if (table::contains(&store.reviewer_load, r)) { *table::borrow(&store.reviewer_load, r) } else { 0 };
-                assert!(busy_check == 0, 9);
-                vector::push_back(&mut selected, r);
-                j = j + 1;
-            };
-        };
-        
-        let final_selected_len = vector::length(&selected);
-        assert!(final_selected_len >= MIN_REVIEWERS, 4);
-        let check_idx = 0;
-        while (check_idx < final_selected_len) {
-            let r_check = *vector::borrow(&selected, check_idx);
-            assert!(r_check != poster_addr && r_check != freelancer_addr, 10);
-            check_idx = check_idx + 1;
-        };
 
         let dispute_id = store.next_dispute_id;
         store.next_dispute_id = store.next_dispute_id + 1;
@@ -202,11 +166,6 @@ module job_work_board::dispute {
     ) acquires DisputeStore {
         let reviewer_addr = signer::address_of(reviewer);
 
-        let store = borrow_global_mut<DisputeStore>(@job_work_board);
-        let dispute = table::borrow_mut(&mut store.table, dispute_id);
-        
-        assert!(dispute.status == DisputeStatus::Voting, 1);
-        assert!(reviewer_addr != dispute.poster && reviewer_addr != dispute.freelancer, 1);
 
         let allowed = false;
         let k = 0;
@@ -243,16 +202,7 @@ module job_work_board::dispute {
         dispute_id: u64,
         evidence_cid: String
     ) acquires DisputeStore {
-        let caller = signer::address_of(s);
-        let store = borrow_global_mut<DisputeStore>(@job_work_board);
-        let dispute = table::borrow_mut(&mut store.table, dispute_id);
-        assert!(caller == dispute.poster || caller == dispute.freelancer, 1);
-        if (caller == dispute.poster) {
-            dispute.poster_evidence_cid = option::some(evidence_cid);
-        } else {
-            dispute.freelancer_evidence_cid = option::some(evidence_cid);
-        };
-    }
+          }
 
     public fun tally_votes(dispute_id: u64) acquires DisputeStore {
         let store = borrow_global_mut<DisputeStore>(@job_work_board);
@@ -263,15 +213,7 @@ module job_work_board::dispute {
         let total_votes = vector::length(&dispute.votes);
         assert!(total_votes >= MIN_REVIEWERS, 1);
 
-        let freelancer_votes = 0;
-        let i = 0;
-        while (i < total_votes) {
-            if (vector::borrow(&dispute.votes, i).choice) {
-                freelancer_votes = freelancer_votes + 1;
-            };
-            i = i + 1;
-        };
-
+      
         let poster_votes = total_votes - freelancer_votes;
         let winner_is_freelancer = freelancer_votes >= 2;
         if (freelancer_votes >= 2) {
