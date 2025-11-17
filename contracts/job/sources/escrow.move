@@ -281,6 +281,13 @@ module job_work_board::escrow {
         assert!(job.poster == poster_addr, 1);
         assert!(job.state == JobState::InProgress, 1);
 
+        let i = find_milestone_index(&job.milestones, milestone_id);
+        let milestone = vector::borrow_mut(&mut job.milestones, i);
+        assert!(milestone.status == MilestoneStatus::Submitted, 1);
+
+        let now = timestamp::now_seconds();
+        assert!(now <= milestone.review_deadline, 1);
+
         milestone.status = MilestoneStatus::Locked;
         job.state = JobState::Disputed;
     }
@@ -392,20 +399,7 @@ module job_work_board::escrow {
         let len = vector::length(&job.milestones);
         let i = 0;
 
-        while (i < len) {
-            let milestone = vector::borrow_mut(&mut job.milestones, i);
-            if (milestone.status != MilestoneStatus::Locked && milestone.status != MilestoneStatus::Withdrawn) {
-                if (milestone.status == MilestoneStatus::Pending || milestone.status == MilestoneStatus::Submitted) {
-                    let available = coin::value(&job.job_funds);
-                    if (available >= milestone.amount) {
-                        let refund = coin::extract(&mut job.job_funds, milestone.amount);
-                        coin::deposit(poster_addr, refund);
-                        milestone.status = MilestoneStatus::Withdrawn;
-                    };
-                };
-            };
-            i = i + 1;
-        };
+
     }
 
     public entry fun mutual_cancel(s: &signer, job_id: u64) acquires EscrowStore {
@@ -458,8 +452,7 @@ module job_work_board::escrow {
         
         job.freelancer = option::none();
         job.state = JobState::Cancelled;
-        job.mutual_cancel_requested_by = option::none();
-        job.freelancer_withdraw_requested_by = option::none();  
+
     }
 
     public entry fun reject_mutual_cancel(freelancer: &signer, job_id: u64) acquires EscrowStore {
@@ -509,9 +502,7 @@ module job_work_board::escrow {
 
         assert!(option::is_some(&job.freelancer) && *option::borrow(&job.freelancer) == freelancer_addr, 1);
         assert!(job.state != JobState::Disputed, 4); 
-        assert!(option::is_none(&job.dispute_id), 4); 
-        assert!(option::is_none(&job.dispute_winner), 4); 
-        assert!(!has_milestone_submitted(&job.milestones), 5); 
+
         
         if (option::is_some(&job.freelancer_withdraw_requested_by)) {
             return
