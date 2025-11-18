@@ -1,37 +1,22 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Button } from '@/components/ui/button';
 import { Container } from '@/components/ui/container';
+import { Button } from '@/components/ui/button';
 import { NAVIGATION } from '@/constants/landing';
 import { useWallet } from '@/contexts/WalletContext';
-import { Wallet, LogOut, ChevronDown, Copy, Check, Shield, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
-
-// const dancingScript = {
-//   fontFamily: "'Dancing Script', cursive",
-//   fontWeight: 700,
-// };
-const robotoCondensed = {
-    fontFamily: "'Roboto Condensed', sans-serif",
-    fontWeight: 400,
-    fontStyle: 'normal',
-  };
+import { formatAddress, copyAddress } from '@/utils/addressUtils';
 export function Header() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showWalletMenu, setShowWalletMenu] = useState(false);
-  const [copiedAddress, setCopiedAddress] = useState(false);
   const pathname = usePathname();
   const { account, isConnecting, connectWallet, disconnectWallet, aptosNetwork } = useWallet();
 
-  useEffect(() => {
-    const link = document.createElement('link');
-    link.href = 'https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;500;600;700&family=Roboto+Condensed:ital,wght@0,300;0,400;0,700;1,300;1,400;1,700&display=swap';
-    link.rel = 'stylesheet';
-    document.head.appendChild(link);
-  }, []);
 
   useEffect(() => {
     const handleClickOutside = () => {
@@ -46,42 +31,26 @@ export function Header() {
     };
   }, [showWalletMenu]);
 
-  useEffect(() => {
-    if (copiedAddress) {
-      const timer = setTimeout(() => {
-        setCopiedAddress(false);
-      }, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [copiedAddress]);
-
-  const handleCopyAddress = async () => {
-    if (!account) return;
-    
-    try {
-      await navigator.clipboard.writeText(account);
-      setCopiedAddress(true);
-      toast.success('Đã copy địa chỉ ví vào clipboard!');
-    } catch (err) {
-      console.error('Copy address error:', err);
-      toast.error('Không thể copy địa chỉ ví');
+  const handleCopyAddress = () => {
+    if (account) {
+      copyAddress(account);
     }
   };
 
+
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
+    <header className="fixed top-0 left-0 right-0 z-30 bg-white border-b-2 border-blue-800 shadow-md">
       <Container>
         <div className="flex items-center justify-between h-16">
             <Link href="/" className="flex items-center gap-3">
-              <img 
+              <Image 
                 src="/images/landing/logo_full.png" 
                 alt="Marketplace2vn Logo" 
+                width={32}
+                height={32}
                 className="h-8 object-contain"
               />
-              <span 
-                style={robotoCondensed}
-                className="text-xl text-primary"
-              >
+              <span className="text-xl font-bold text-blue-800">
                 Marketplace2vn
               </span>
             </Link>
@@ -93,16 +62,13 @@ export function Header() {
                  <Link
                    key={item.name}
                    href={item.href}
-                   className={`transition-colors font-medium relative ${
+                   className={`font-medium no-underline text-lg ${
                      isActive 
-                       ? 'text-primary' 
-                       : 'text-text-primary hover:text-primary'
+                       ? 'text-blue-800 border-b-2 border-blue-800 pb-1' 
+                       : 'text-gray-700 hover:text-blue-800'
                    }`}
                  >
                    {item.name}
-                   {isActive && (
-                     <span className="absolute -bottom-1 left-0 right-0 h-0.5 bg-primary rounded-full"></span>
-                   )}
                  </Link>
                );
              })}
@@ -111,183 +77,95 @@ export function Header() {
           <div className="hidden md:flex items-center gap-4">
             {!account ? (
               <Button 
-                variant="outline" 
-                size="sm" 
                 onClick={connectWallet}
                 disabled={isConnecting}
-                className="flex items-center gap-2"
+                variant="primary"
+                size="sm"
               >
-                <Wallet className="w-4 h-4" />
-                                 {isConnecting ? 'Đang kết nối...' : 'Kết nối ví Petra'}
+                {isConnecting ? 'Connecting...' : 'Connect Wallet'}
               </Button>
             ) : (
               <div className="relative">
                 <Button 
-                  variant="outline" 
-                  size="sm"
                   onClick={() => setShowWalletMenu(!showWalletMenu)}
-                  className="flex items-center gap-2"
+                  variant="primary"
+                  size="sm"
+                  className="bg-green-600 border-green-600"
                 >
-                  <Wallet className="w-4 h-4" />
-                                     <span className="hidden sm:inline font-mono">
-                     {account.slice(0, 6)}...{account.slice(-4)}
-                   </span>
-                  <ChevronDown className="w-4 h-4" />
+                  <span className="hidden sm:inline font-mono">
+                    {formatAddress(account)}
+                  </span>
+                  <span className="sm:hidden">Wallet</span>
                 </Button>
                 
-                {showWalletMenu && (
-                                     <div className="absolute right-0 top-full mt-2 w-64 bg-background border border-border rounded-lg shadow-lg z-50">
-                     <div className="p-4 space-y-3">
-                       <div className="text-sm">
-                         <div className="font-medium flex items-center justify-between">
-                           Địa chỉ ví
-                           <Button
-                             variant="ghost"
-                             size="sm"
-                             onClick={handleCopyAddress}
-                             className="h-6 w-6 p-0 hover:bg-muted"
-                           >
-                             {copiedAddress ? (
-                               <Check className="w-3 h-3 text-green-600" />
-                             ) : (
-                               <Copy className="w-3 h-3" />
-                             )}
-                           </Button>
-                         </div>
-                         <div className="text-muted-foreground font-mono text-xs break-all">
-                           {account}
-                         </div>
-                       </div>
-                                             <div className="text-sm">
-                         <div className="font-medium">Mạng</div>
-                         <div className="flex items-center gap-2">
-                           <span className="text-muted-foreground">
-                             {aptosNetwork || 'Unknown'}
-                           </span>
-                           <div className={`w-2 h-2 rounded-full ${
-                             aptosNetwork === 'Testnet' ? 'bg-yellow-500' : 
-                             aptosNetwork === 'Mainnet' ? 'bg-green-500' : 'bg-gray-500'
-                           }`} />
-                         </div>
-                       </div>
-                                             <div className="pt-2 border-t border-border space-y-1">
-                         <Link href="/auth/did-verification" onClick={() => setShowWalletMenu(false)}>
-                           <Button 
-                             variant="ghost" 
-                             size="sm" 
-                             className="w-full justify-start text-primary hover:text-primary/80 hover:bg-primary/10"
-                           >
-                             <Shield className="w-4 h-4 mr-2" />
-                             Xác minh DID
-                             <ExternalLink className="w-3 h-3 ml-auto" />
-                           </Button>
-                         </Link>
-                         <Button 
-                           variant="ghost" 
-                           size="sm" 
-                           onClick={disconnectWallet}
-                           className="w-full justify-start text-red-600 hover:text-red-700 hover:bg-red-50"
-                         >
-                           <LogOut className="w-4 h-4 mr-2" />
-                           Ngắt kết nối
-                         </Button>
-                       </div>
-                    </div>
-                  </div>
-                )}
+                {showWalletMenu && null}
               </div>
             )}
           </div>
 
           <div className="md:hidden flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
+              className="p-2 text-gray-700 hover:text-blue-800 hover:bg-gray-100"
               aria-label="Toggle mobile menu"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             >
               {isMobileMenuOpen ? '✕' : '☰'}
-            </Button>
+            </button>
           </div>
         </div>
 
         {isMobileMenuOpen && (
-                     <div className="md:hidden py-4 border-t border-border">
-            <nav className="flex flex-col space-y-4">
-                {NAVIGATION.map((item) => {
-                  const isActive = pathname === item.href;
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                                             className={`transition-colors font-medium flex items-center ${
-                         isActive 
-                           ? 'text-primary' 
-                           : 'text-text-primary hover:text-primary'
-                       }`}
-                      onClick={() => setIsMobileMenuOpen(false)}
-                    >
-                      {item.name}
-                      {isActive && (
-                                                 <span className="ml-2 w-2 h-2 bg-primary rounded-full"></span>
-                      )}
-                    </Link>
-                  );
-                })}
-              <div className="flex flex-col gap-2 pt-4">
+          <div className="md:hidden py-4 border-t-2 border-blue-800 bg-gray-50">
+            <nav className="flex flex-col space-y-3">
+              {NAVIGATION.map((item) => {
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={`font-medium no-underline py-2 px-3 ${
+                      isActive 
+                        ? 'text-blue-800 bg-blue-100 border-l-4 border-blue-800' 
+                        : 'text-gray-700 hover:text-blue-800 hover:bg-gray-100'
+                    }`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    {item.name}
+                  </Link>
+                );
+              })}
+              <div className="flex flex-col gap-2 pt-4 border-t-2 border-blue-800">
                 {!account ? (
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <button 
+                    className="px-3 py-2 bg-white text-black border-2 border-black hover:bg-gray-100"
                     onClick={connectWallet}
                     disabled={isConnecting}
-                    className="justify-start"
                   >
-                    <Wallet className="w-4 h-4 mr-2" />
-                                         {isConnecting ? 'Đang kết nối...' : 'Kết nối ví Petra'}
-                  </Button>
-                                 ) : (
-                   <div className="space-y-2">
-                     <div className="text-sm p-2 bg-muted rounded">
-                       <div className="font-medium flex items-center justify-between">
-                         Địa chỉ ví
-                         <Button
-                           variant="ghost"
-                           size="sm"
-                           onClick={handleCopyAddress}
-                           className="h-6 w-6 p-0 hover:bg-muted"
-                         >
-                           {copiedAddress ? (
-                             <Check className="w-3 h-3 text-green-600" />
-                           ) : (
-                             <Copy className="w-3 h-3" />
-                           )}
-                         </Button>
-                       </div>
-                       <div className="text-muted-foreground font-mono text-xs break-all">
-                         {account}
-                       </div>
-                     </div>
-                                         <Link href="/auth/did-verification" onClick={() => setIsMobileMenuOpen(false)}>
-                       <Button 
-                         variant="ghost" 
-                         size="sm" 
-                         className="w-full justify-start text-primary"
-                       >
-                         <Shield className="w-4 h-4 mr-2" />
-                         Xác minh DID
-                         <ExternalLink className="w-3 h-3 ml-auto" />
-                       </Button>
-                     </Link>
-                     <Button 
-                       variant="ghost" 
-                       size="sm" 
-                       onClick={disconnectWallet}
-                       className="w-full justify-start text-red-600"
-                     >
-                       <LogOut className="w-4 h-4 mr-2" />
-                       Ngắt kết nối
-                     </Button>
+                    {isConnecting ? 'Đang kết nối...' : 'Kết nối ví'}
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="text-sm p-3 bg-white border-2 border-gray-300">
+                      <div className="font-medium text-gray-700">Địa chỉ ví</div>
+                      <div 
+                        className="text-gray-500 font-bold text-sm cursor-pointer hover:bg-gray-50 px-1 py-1 hover:text-blue-800 hover:underline"
+                        onClick={handleCopyAddress}
+                        title="Click to copy"
+                      >
+                        {formatAddress(account)}
+                      </div>
+                    </div>
+                    <Link href="/auth/did-verification" onClick={() => setIsMobileMenuOpen(false)}>
+                      <button className="w-full px-3 py-2 bg-white text-black border-2 border-black hover:bg-gray-100">
+                        Xác minh DID
+                      </button>
+                    </Link>
+                    <button 
+                      className="w-full px-3 py-2 bg-white text-black border-2 border-black hover:bg-gray-100"
+                      onClick={disconnectWallet}
+                    >
+                      Ngắt kết nối
+                    </button>
                   </div>
                 )}
               </div>
@@ -295,6 +173,45 @@ export function Header() {
           </div>
         )}
       </Container>
+      {showWalletMenu && typeof window !== 'undefined' && createPortal(
+        <div className="fixed right-4 top-16 mt-2 w-64 bg-white border-2 border-blue-800 shadow-lg z-[60]">
+          <div className="p-4 space-y-3">
+            <div className="text-sm">
+              <div className="font-bold text-blue-800">Địa chỉ ví</div>
+              <div 
+                className="text-gray-600 font-bold text-sm cursor-pointer hover:bg-blue-50 px-2 py-2 border-2 border-blue-800 bg-blue-50 hover:text-blue-800 hover:underline"
+                onClick={handleCopyAddress}
+                title="Click to copy"
+              >
+                {formatAddress(account)}
+              </div>
+            </div>
+            <div className="text-sm">
+              <div className="font-bold text-blue-800">Mạng</div>
+              <div className="text-gray-700 font-medium">
+                {aptosNetwork || 'Không xác định'}
+              </div>
+            </div>
+            <div className="pt-2 border-t-2 border-blue-800 space-y-1">
+              <Link href="/auth/did-verification" onClick={() => setShowWalletMenu(false)}>
+                <button className="w-full px-3 py-2 bg-white text-black border-2 border-black hover:bg-gray-100 font-medium">
+                  Xác minh DID
+                </button>
+              </Link>
+           
+              <button
+                className="w-full px-3 py-2 bg-white text-black border-2 border-black hover:bg-gray-100 font-medium"
+                onClick={disconnectWallet}
+              >
+                Ngắt kết nối
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+
     </header>
   );
 }
